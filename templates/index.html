@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Puzzle Piece Matcher</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
     <div class="container">
@@ -22,11 +22,19 @@
                 <label for="piece">Upload Piece Image:</label>
                 <input type="file" id="piece" name="piece" accept="image/*" required>
             </div>
+            <div class="form-group">
+                <label for="matching-technique">Matching Technique:</label>
+                <select id="matching-technique">
+                    <option value="flann">FLANN Matcher (Default)</option>
+                    <option value="brute_force">Brute-Force Matcher</option>
+                    <option value="template_matching">Template Matching</option>
+                </select>
+            </div>
             <button type="submit">Match Piece</button>
         </form>
         <div id="message"></div>
         <div id="result"></div>
     </div>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="static/main.js"></script>
 </body>
 </html>

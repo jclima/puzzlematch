@@ -54,9 +54,11 @@ pieceForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const pieceFile = document.getElementById('piece').files[0];
+    const matchingTechnique = document.getElementById('matching-technique').value;
 
     const formData = new FormData();
     formData.append('piece', pieceFile);
+    formData.append('matching_technique', matchingTechnique);
 
     message.textContent = '';
     result.innerHTML = '';

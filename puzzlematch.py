@@ -82,6 +82,7 @@ def match_piece():
         return jsonify({'error': 'No file uploaded'}), 400
 
     piece = request.files['piece']
+    matching_technique = request.form.get('matching_technique', 'flann')
 
     if piece.filename == '':
         return jsonify({'error': 'No file selected'}), 400
@@ -106,37 +107,57 @@ def match_piece():
         keypoints_puzzle, descriptors_puzzle = sift.detectAndCompute(puzzle_img, None)
         keypoints_piece, descriptors_piece = sift.detectAndCompute(piece_img, None)
 
-        # Create FLANN matcher
-        FLANN_INDEX_KDTREE = 1
-        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
-        search_params = dict(checks=50)
-        flann = cv2.FlannBasedMatcher(index_params, search_params)
+        if matching_technique == 'flann':
+            # Use FLANN matcher
+            FLANN_INDEX_KDTREE = 1
+            index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
+            search_params = dict(checks=50)
+            flann = cv2.FlannBasedMatcher(index_params, search_params)
 
-        # Match descriptors
-        matches = flann.knnMatch(descriptors_piece, descriptors_puzzle, k=2)
+            # Match descriptors
+            matches = flann.knnMatch(descriptors_piece, descriptors_puzzle, k=2)
 
-        # Apply ratio test to filter good matches
-        good_matches = []
-        for m, n in matches:
-            if m.distance < 0.75 * n.distance:
-                good_matches.append(m)
+            # Apply ratio test to filter good matches
+            good_matches = []
+            for m, n in matches:
+                if m.distance < 0.75 * n.distance:
+                    good_matches.append(m)
+        elif matching_technique == 'brute_force':
+            # Use Brute-Force matcher
+            bf = cv2.BFMatcher()
+            matches = bf.knnMatch(descriptors_piece, descriptors_puzzle, k=2)
+            
+            good_matches = []
+            for m, n in matches:
+                if m.distance < 0.75 * n.distance:
+                    good_matches.append(m)
+        elif matching_technique == 'template_matching':
+            # Use Template Matching
+            result = cv2.matchTemplate(puzzle_img, piece_img, cv2.TM_CCOEFF_NORMED)
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+            
+            top_left = max_loc
+            h, w = piece_img.shape[:2]
+            bottom_right = (top_left[0] + w, top_left[1] + h)
+            cv2.rectangle(puzzle_img, top_left, bottom_right, (0, 255, 0), 2)
+        
+        if matching_technique != 'template_matching':
+            # Extract the matched keypoints
+            piece_points = np.float32([keypoints_piece[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+            puzzle_points = np.float32([keypoints_puzzle[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
 
-        # Extract the matched keypoints
-        piece_points = np.float32([keypoints_piece[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-        puzzle_points = np.float32([keypoints_puzzle[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+            # Find homography matrix
+            M, _ = cv2.findHomography(piece_points, puzzle_points, cv2.RANSAC, 5.0)
 
-        # Find homography matrix
-        M, _ = cv2.findHomography(piece_points, puzzle_points, cv2.RANSAC, 5.0)
+            # Get the dimensions of the piece image
+            h, w = piece_img.shape[:2]
 
-        # Get the dimensions of the piece image
-        h, w = piece_img.shape[:2]
+            # Transform the corners of the piece image
+            corners = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
+            transformed_corners = cv2.perspectiveTransform(corners, M)
 
-        # Transform the corners of the piece image
-        corners = np.float32([[0, 0], [0, h - 1], [w - 1, h - 1], [w - 1, 0]]).reshape(-1, 1, 2)
-        transformed_corners = cv2.perspectiveTransform(corners, M)
-
-        # Draw the matched region on the puzzle image
-        cv2.polylines(puzzle_img, [np.int32(transformed_corners)], True, (0, 255, 0), 2, cv2.LINE_AA)
+            # Draw the matched region on the puzzle image
+            cv2.polylines(puzzle_img, [np.int32(transformed_corners)], True, (0, 255, 0), 2, cv2.LINE_AA)
 
         _, buffer = cv2.imencode('.png', puzzle_img)
         buffer = BytesIO(buffer)
@@ -152,4 +173,4 @@ def match_piece():
 
 
 if __name__ == '__main__':
-    app.run(debug=os.environ.get('DEBUG') == '1', host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(debug=os.environ.get('DEBUG') == '1', host='0.0.0.0', port=int(os.environ.get('PORT', 5555)))
